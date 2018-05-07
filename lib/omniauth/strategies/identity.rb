@@ -6,28 +6,27 @@ module OmniAuth
     class Identity
       include OmniAuth::Strategy
 
-      option :fields, [:name, :email]
+      option :fields, [:login]
       option :on_login, nil
       option :on_registration, nil
       option :on_failed_registration, nil
-      option :locate_conditions, lambda{|req| {model.auth_key => req['auth_key']} }
+      option :locate_conditions, lambda{|req| Rails.logger.debug [:locate_conditions, model, req['login']]; {model.auth_key => req['login']} }
 
       def request_phase
         if options[:on_login]
           options[:on_login].call(self.env)
         else
           OmniAuth::Form.build(
-            :title => (options[:title] || "Identity Verification"),
-            :url => callback_path
+            :title => (options[:title] || "Sign in"),
+            :url => registration_path
           ) do |f|
-            f.text_field 'Login', 'auth_key'
-            f.password_field 'Password', 'password'
-            f.html "<p align='center'><a href='#{registration_path}'>Create an Identity</a></p>"
+            f.text_field 'Login', 'login'
           end.to_response
         end
       end
 
       def callback_phase
+        Rails.logger.debug [:callback_phase, identity, session['omniauth.env']]
         return fail!(:invalid_credentials) unless identity
         super
       end
@@ -48,19 +47,20 @@ module OmniAuth
         if options[:on_registration]
           options[:on_registration].call(self.env)
         else
-          OmniAuth::Form.build(:title => 'Register Identity') do |f|
-            options[:fields].each do |field|
-              f.text_field field.to_s.capitalize, field.to_s
-            end
-            f.password_field 'Password', 'password'
-            f.password_field 'Confirm Password', 'password_confirmation'
+          OmniAuth::Form.build(
+            :title => (options[:title] || "Confirm"),
+            :url => callback_path
+            ) do |f|
+            f.text_field 'Password', 'password'
           end.to_response
         end
       end
 
       def registration_phase
-        attributes = (options[:fields] + [:password, :password_confirmation]).inject({}){|h,k| h[k] = request[k.to_s]; h}
+        attributes = (options[:fields] + []).inject({}){|h,k| h[k] = request[k.to_s]; h}
+        attributes[:password] = '123'
         @identity = model.create(attributes)
+        Rails.logger.debug [:registration_phase, @identity]
         if @identity.persisted?
           env['PATH_INFO'] = callback_path
           callback_phase
@@ -87,12 +87,14 @@ module OmniAuth
 
       def identity
         if options.locate_conditions.is_a? Proc
+          Rails.logger.debug [:request, request.params, options]
           conditions = instance_exec(request, &options.locate_conditions)
           conditions.to_hash
         else
           conditions = options.locate_conditions.to_hash
         end
-        @identity ||= model.authenticate(conditions, request['password'] )
+        Rails.logger.debug [:identity, conditions, request['password']]
+        @identity ||= model.authenticate(conditions, request['password'])
       end
 
       def model
