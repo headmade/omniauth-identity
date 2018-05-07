@@ -54,7 +54,7 @@ module OmniAuth
         end
       end
 
-      def confirmation_form(args={})
+      def confirmation_form
         if options[:on_confirmation]
           options[:on_confirmation].call(self.env)
         else
@@ -63,7 +63,7 @@ module OmniAuth
             :url => registration_path,
             ) do |f|
               f.text_field option_title(:password), 'password'
-              f.label_field args[:error], option_title(:confirmation_error) if args[:error]
+              #f.label_field args[:error], option_title(:confirmation_error) if args[:error]
               f.button option_title(:confirm)
           end.to_response
         end
@@ -80,26 +80,28 @@ module OmniAuth
         Rails.logger.debug [:confirmation_phase, login, attributes, model]
 
         @identity = model.create(attributes)
-        Rails.logger.debug [:confirmation_phase, @identity]
+        Rails.logger.debug [:identity, @identity]
 
         if @identity.persisted?
-          session['omniauth.identity_id'] = @identity.id
+          env['omniauth.identity'] = model.find(@identity.id)
           confirmation_form
+        else
+          request_form
         end
       end
 
       def registration_phase
-        @identity = model.find(session['omniauth.identity_id'])
-        if @identity.authenticate(request['password'])
-          session['omniauth.identity_id'] = nil
+        if identity
           env['PATH_INFO'] = callback_path
           callback_phase
         else
+          not_authorized_identity = model.find(request['id'])
+          not_authorized_identity.errors.add(:password)
+          self.env['omniauth.identity'] = not_authorized_identity
           if options[:on_failed_registration]
-            self.env['omniauth.identity'] = @identity
             options[:on_failed_registration].call(self.env)
           else
-            confirmation_form(error: 'Неверный код авторизации')
+            confirmation_form
           end
         end
       end
@@ -121,8 +123,7 @@ module OmniAuth
       end
 
       def identity
-        Rails.logger.debug [:identity, request['password'], session['omniauth.identity']]
-        conditions = {id: session['omniauth.identity']}
+        conditions = {id: request['id']}
         @identity ||= model.authenticate(conditions, request['password'])
       end
 
