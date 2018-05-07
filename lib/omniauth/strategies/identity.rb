@@ -21,13 +21,17 @@ module OmniAuth
           options[:on_login].call(self.env)
         else
           OmniAuth::Form.build(
-            title: (options[:title] || "Sign in"),
+            title: option_title(:request_phase),
             url: confirmation_path,
           ) do |f|
-            f.text_field 'Login', 'login'
-              f.button 'Sign in'
+            f.text_field option_title(:login), 'login'
+            f.button option_title(:sign_in)
           end.to_response
         end
+      end
+
+      def option_title(key)
+        options[[key,:title].join('_').to_sym] || key.to_s.humanize
       end
 
       def callback_phase
@@ -55,12 +59,12 @@ module OmniAuth
           options[:on_confirmation].call(self.env)
         else
           OmniAuth::Form.build(
-            :title => (options[:title] || "Confirm"),
-            :url => registration_path
+            :title => option_title(:confirmation_phase),
+            :url => registration_path,
             ) do |f|
-              f.text_field 'Password', 'password'
-              f.label_field args[:error], :error if args[:error]
-              f.button 'Confirm'
+              f.text_field option_title(:password), 'password'
+              f.label_field args[:error], option_title(:confirmation_error) if args[:error]
+              f.button option_title(:confirm)
           end.to_response
         end
       end
@@ -71,7 +75,6 @@ module OmniAuth
 
         attributes = {
           login: login,
-          password: '123',
         }
 
         Rails.logger.debug [:confirmation_phase, login, attributes, model]
