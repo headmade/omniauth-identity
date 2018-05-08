@@ -97,13 +97,23 @@ module OmniAuth
           env['PATH_INFO'] = callback_path
           callback_phase
         else
-          not_authorized_identity = model.find(request['id'])
-          not_authorized_identity.errors.add(:password)
+          not_authorized_identity = model.find_by(id: request['id'])
+          if not_authorized_identity.present?
+            not_authorized_identity.errors.add(:password)
+          else
+            not_authorized_identity = model.new
+            not_authorized_identity.errors.add(:login, 'уже был подтверждён')
+          end
+
           self.env['omniauth.identity'] = not_authorized_identity
           if options[:on_failed_registration]
             options[:on_failed_registration].call(self.env)
           else
-            confirmation_form
+            if not_authorized_identity.persisted?
+              confirmation_form
+            else
+              request_form
+            end
           end
         end
       end
