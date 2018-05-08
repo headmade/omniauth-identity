@@ -13,6 +13,7 @@ module OmniAuth
       option :locate_conditions, lambda{|req| Rails.logger.debug [:locate_conditions, model, req['login']]; {model.auth_key => req['login']} }
 
       def request_phase
+        env['omniauth.identity'] = model.new
         request_form
       end
 
@@ -86,6 +87,7 @@ module OmniAuth
           env['omniauth.identity'] = model.find(@identity.id)
           confirmation_form
         else
+          env['omniauth.identity'] = @identity
           request_form
         end
       end
